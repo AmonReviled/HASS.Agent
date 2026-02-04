@@ -651,13 +651,35 @@ namespace HASS.Agent.MQTT
         /// <returns></returns>
         public async Task SubscribeNotificationsAsync()
         {
-            if (!Variables.AppSettings.MqttEnabled)
-                return;
+            try
+            {
+                if (!Variables.AppSettings.MqttEnabled)
+                {
+                    Log.Information("[MQTT] SubscribeNotificationsAsync: MQTT not enabled, skipping");
+                    return;
+                }
 
-            while (!IsConnected())
-                await Task.Delay(250);
+                if (_mqttClient == null)
+                {
+                    Log.Warning("[MQTT] SubscribeNotificationsAsync: MQTT client is null");
+                    return;
+                }
 
-            await _mqttClient.SubscribeAsync($"hass.agent/notifications/{HelperFunctions.GetConfiguredDeviceName()}");
+                Log.Information("[MQTT] SubscribeNotificationsAsync: Waiting for connection...");
+                while (!IsConnected())
+                    await Task.Delay(250);
+
+                var topic = $"hass.agent/notifications/{HelperFunctions.GetConfiguredDeviceName()}";
+                Log.Information("[MQTT] SubscribeNotificationsAsync: Subscribing to topic: {topic}", topic);
+                
+                await _mqttClient.SubscribeAsync(topic);
+                
+                Log.Information("[MQTT] SubscribeNotificationsAsync: Successfully subscribed to notifications topic");
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "[MQTT] SubscribeNotificationsAsync: Error while subscribing to notifications: {err}", ex.Message);
+            }
         }
 
         /// <summary>
@@ -666,13 +688,35 @@ namespace HASS.Agent.MQTT
         /// <returns></returns>
         public async Task SubscribeMediaCommandsAsync()
         {
-            if (!Variables.AppSettings.MqttEnabled)
-                return;
+            try
+            {
+                if (!Variables.AppSettings.MqttEnabled)
+                {
+                    Log.Information("[MQTT] SubscribeMediaCommandsAsync: MQTT not enabled, skipping");
+                    return;
+                }
 
-            while (!IsConnected())
-                await Task.Delay(250);
+                if (_mqttClient == null)
+                {
+                    Log.Warning("[MQTT] SubscribeMediaCommandsAsync: MQTT client is null");
+                    return;
+                }
 
-            await _mqttClient.SubscribeAsync($"hass.agent/media_player/{HelperFunctions.GetConfiguredDeviceName()}/cmd");
+                Log.Information("[MQTT] SubscribeMediaCommandsAsync: Waiting for connection...");
+                while (!IsConnected())
+                    await Task.Delay(250);
+
+                var topic = $"hass.agent/media_player/{HelperFunctions.GetConfiguredDeviceName()}/cmd";
+                Log.Information("[MQTT] SubscribeMediaCommandsAsync: Subscribing to topic: {topic}", topic);
+                
+                await _mqttClient.SubscribeAsync(topic);
+                
+                Log.Information("[MQTT] SubscribeMediaCommandsAsync: Successfully subscribed to media player topic");
+            }
+            catch (Exception ex)
+            {
+                Log.Fatal(ex, "[MQTT] SubscribeMediaCommandsAsync: Error while subscribing to media player: {err}", ex.Message);
+            }
         }
 
         /// <summary>
@@ -784,17 +828,35 @@ namespace HASS.Agent.MQTT
         {
             try
             {
-                // process as a notification
-                if (applicationMessage.Topic == $"hass.agent/notifications/{HelperFunctions.GetConfiguredDeviceName()}")
+                var expectedNotificationTopic = $"hass.agent/notifications/{HelperFunctions.GetConfiguredDeviceName()}";
+                
+                Log.Debug("[MQTT] HandleMessageReceived: Received message on topic: {topic}", applicationMessage.Topic);
+                
+                // Check if topic starts with hass.agent/notifications for debugging
+                if (applicationMessage.Topic.StartsWith("hass.agent/notifications", StringComparison.OrdinalIgnoreCase))
                 {
-                    var notification = JsonConvert.DeserializeObject<Notification>(Encoding.UTF8.GetString(applicationMessage.PayloadSegment), JsonSerializerSettings)!;
+                    Log.Information("[MQTT] HandleMessageReceived: Notification topic received: {receivedTopic}", applicationMessage.Topic);
+                    Log.Information("[MQTT] HandleMessageReceived: Expected topic: {expectedTopic}", expectedNotificationTopic);
+                    Log.Information("[MQTT] HandleMessageReceived: Topics match: {match}", applicationMessage.Topic == expectedNotificationTopic);
+                    Log.Information("[MQTT] HandleMessageReceived: Case-insensitive match: {match}", string.Equals(applicationMessage.Topic, expectedNotificationTopic, StringComparison.OrdinalIgnoreCase));
+                }
+
+                // process as a notification - use case-insensitive comparison
+                if (string.Equals(applicationMessage.Topic, expectedNotificationTopic, StringComparison.OrdinalIgnoreCase))
+                {
+                    Log.Information("[MQTT] HandleMessageReceived: Processing notification from topic: {topic}", applicationMessage.Topic);
+                    var payloadStr = Encoding.UTF8.GetString(applicationMessage.PayloadSegment);
+                    Log.Debug("[MQTT] HandleMessageReceived: Notification payload: {payload}", payloadStr);
+                    
+                    var notification = JsonConvert.DeserializeObject<Notification>(payloadStr, JsonSerializerSettings)!;
                     _ = Task.Run(() => NotificationManager.ShowNotification(notification));
 
                     return Task.CompletedTask;
                 }
 
                 // process as a mediaplyer command
-                if (applicationMessage.Topic == $"hass.agent/media_player/{HelperFunctions.GetConfiguredDeviceName()}/cmd")
+                var expectedMediaTopic = $"hass.agent/media_player/{HelperFunctions.GetConfiguredDeviceName()}/cmd";
+                if (string.Equals(applicationMessage.Topic, expectedMediaTopic, StringComparison.OrdinalIgnoreCase))
                 {
                     var command = JsonConvert.DeserializeObject<MqttMediaPlayerCommand>(Encoding.UTF8.GetString(applicationMessage.PayloadSegment), JsonSerializerSettings)!;
 
