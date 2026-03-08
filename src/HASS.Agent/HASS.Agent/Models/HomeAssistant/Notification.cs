@@ -41,6 +41,6 @@ namespace HASS.Agent.Models.HomeAssistant
         public string Message { get; set; }
         public string Title { get; set; }
 
-        public NotificationData Data { get; set; }
+        public NotificationData Data { get; set; } = new NotificationData();
     }
 }

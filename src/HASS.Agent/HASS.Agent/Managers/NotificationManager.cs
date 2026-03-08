@@ -108,6 +108,8 @@ namespace HASS.Agent.Managers
                 if (!Variables.AppSettings.NotificationsEnabled || _notificationManager == null)
                     return;
 
+                notification.Data ??= new Models.HomeAssistant.NotificationData();
+
                 if (notification.Message == SpecialClear)
                 {
                     if (!string.IsNullOrWhiteSpace(notification.Data.Tag) && !string.IsNullOrWhiteSpace(notification.Data.Group))
